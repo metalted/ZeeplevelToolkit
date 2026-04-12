@@ -11,23 +11,7 @@ using UnityEngine;
 namespace ZeeplevelToolkit
 {
     public static class ZeeplevelHandler
-    {
-        public static ZeeplevelData FromPath(string path)
-        {
-            return FromFile(new FileInfo(path));
-        }
-        public static ZeeplevelData FromFile(FileInfo file)
-        {
-            if (file == null || !file.Exists)
-            {
-                return null;
-            }
-
-            string content = File.ReadAllText(ZeepkistFolders.ConvertToLongPath(file.FullName));
-            return GeneralLevelLoadStatic.IsThisLevelDataStringV15(content)
-                ? FromJSON(content, file)
-                : FromCSV(Regex.Split(content, @"\r\n|\r|\n"), file);
-        }
+    {       
         public static ZeeplevelData FromJSON(string json, FileInfo file = null)
         {
             var data = new ZeeplevelData
@@ -61,6 +45,7 @@ namespace ZeeplevelToolkit
             ZeeplevelHelpers.SetFallbackTimes(data);
             return data;
         }
+
         public static ZeeplevelData FromCSV(string[] lines, FileInfo file = null)
         {
             var csv = new v14LevelCSV(lines);
@@ -186,65 +171,162 @@ namespace ZeeplevelToolkit
             return data;
         }
         
-        public static void LoadIntoEditor(ZeeplevelData data, LEV_LevelEditorCentral central, Vector3? position)
+        public static List<BlockProperties> LoadIntoEditor(ZeeplevelData data, LEV_LevelEditorCentral central)
         {
-            if(!ZeeplevelHelpers.WillSuccesfullyLoadIntoEditor(data))
+            List<BlockProperties> blockList = new List<BlockProperties>();
+
+            if (!ZeeplevelHelpers.WillSuccesfullyLoadIntoEditor(data))
             {
-                return;
+                return blockList;
             }
 
             central.selection.DeselectAllBlocks(true, nameof(central.selection.ClickNothing));
 
-
-
-            List<BlockProperties> blockList = data.GetDataType() == LoadBlocks(data);
+            ZeeplevelData.DataType dataType = data.GetDataType();
             
+            string loadType = "";
+            
+            switch (dataType)
+            {
+                case ZeeplevelData.DataType.CSV:
+                    blockList = LoadBlocks(data.csv);
+                    loadType = "v14";
+                    break;
+                case ZeeplevelData.DataType.JSON:
+                    blockList = LoadBlocks(data.json);
+                    loadType = "v15";
+                    break;
+            }
 
+            UndoRedoRegistration registration = new UndoRedoRegistration(central);
+            registration.SetBefore(blockList.Count);
+            registration.blockList.AddRange(blockList);
+            registration.after.AddRange(blockList.Select(bp => bp.ConvertBlockToJSON_v15_string(true)).ToList());
+
+            registration.GenerateAfter();
+            Change_Collection collection = registration.CreateCollection();
+            central.validation.BreakLock(collection, "Toolkit");
+            central.selection.UndoRedoReselection(registration.blockList);
+
+            return blockList;
         }
 
-        private static List<BlockProperties> LoadBlocks()
-
-        public static void SaveToFile(ZeeplevelData data, string path)
+        public static List<BlockProperties> LoadBlocks(v14LevelCSV csv, bool isVisualOnly = false)
         {
-            if (data == null || !data.isValid)
+            List<BlockProperties> blocks = new List<BlockProperties>();
+            foreach(v14LevelCSVBlock blockData in csv.Blocks)
             {
-                return;
+                if (!blockData.IsValid || blockData.BlockID < 0 || blockData.BlockID >= PlayerManager.Instance.loader.globalBlockList.blocks.Count)
+                {
+                    continue;
+                }
+
+                BlockProperties prefab = PlayerManager.Instance.loader.globalBlockList.blocks[blockData.BlockID];
+                BlockProperties instance = GameObject.Instantiate(prefab);
+                instance.name = prefab.name;
+                instance.isEditor = true;
+                instance.CreateBlock();
+                instance.properties.Clear();
+                if(!isVisualOnly)
+                {
+                    instance.UID = PlayerManager.Instance.GenerateUniqueIDforBlocks(blockData.BlockID.ToString());
+                }                
+                instance.properties.AddRange(blockData.Properties);
+                instance.transform.localPosition = blockData.Position;
+                instance.transform.localEulerAngles = blockData.Rotation;
+                instance.transform.localScale = blockData.Scale;
+                instance.LoadProperties();
+                blocks.Add(instance);
             }
 
-            if (data.json != null)
+            if(isVisualOnly)
             {
-                string jsonString = JsonConvert.SerializeObject(data.json, Formatting.Indented);
-                File.WriteAllText(path, jsonString);
+                return blocks;
             }
-            else if (data.csv != null)
+
+            //Add all loaded blocks to the tracker
+            foreach (BlockProperties bp in blocks)
             {
-                string[] csvLines = data.csv.ToCSV();
-                File.WriteAllLines(path, csvLines);
+                StaticConnectorTracker.AddBlockToTracker(bp, "ToolkitLoader_v14");
+            }
+
+            return blocks;
+        }
+
+        public static List<BlockProperties> LoadBlocks(v15LevelJSON json, bool isVisualOnly = false)
+        {
+            List<BlockPropertyJSON> jsonBlocks;
+            
+            if(isVisualOnly)
+            {
+                jsonBlocks = json.blox;
             }
             else
             {
-                return;
-            }
-        }
-        public static void ToCSVFile(ZeeplevelData data, string path)
-        {
-            if (data.csv == null || !data.isValid)
-            {
-                return;
+                jsonBlocks = new List<BlockPropertyJSON>();
+
+                foreach (BlockPropertyJSON j in json.blox)
+                {
+                    jsonBlocks.Add(ToolkitUtils.DeepCopy(j));
+                }
+
+                ToolkitUtils.ReUID(jsonBlocks);
             }
 
-            File.WriteAllLines(path, data.csv.ToCSV());
-        }
-        public static void ToJSONFile(ZeeplevelData data, string path)
-        {
-            if (data.json == null || !data.isValid)
+            // 3) Instantiate + register blocks, but DON'T load connector logic yet
+            List<BlockProperties> blocks = new List<BlockProperties>();
+            List<BlockEdit_v18> allBlockEdits = new List<BlockEdit_v18>();
+
+            foreach (BlockPropertyJSON blockJson in jsonBlocks)
             {
-                return;
+                if (blockJson.i < 0 || blockJson.i >= PlayerManager.Instance.loader.globalBlockList.blocks.Count)
+                    continue;
+
+                var prefab = PlayerManager.Instance.loader.globalBlockList.blocks[blockJson.i];
+                var instance = UnityEngine.Object.Instantiate(prefab);
+                instance.name = prefab.name;
+                instance.isEditor = true;
+                instance.CreateBlock();
+                instance.properties.Clear();
+                instance.LoadProperties_v15(blockJson, true);
+                instance.UID = blockJson.u;
+
+                if (!isVisualOnly)
+                {
+                    StaticConnectorTracker.AddBlockToTracker(instance, $"ToolkitLoader - {json.level?.name ?? "Unknown"}");
+
+                    // Collect v18 edits for phase-2 connection resolution
+                    var edits = instance.GetAllBlockEditV18sFromThisBlock();
+                    if (edits != null)
+                    {
+                        allBlockEdits.AddRange(edits);
+                    }
+                }
+
+                blocks.Add(instance);
             }
 
-            string json = JsonConvert.SerializeObject(data.json, Formatting.Indented);
-            File.WriteAllText(path, json);
-        }
+            if(isVisualOnly)
+            {
+                return blocks;
+            }
+
+            // 4) Phase 2: allow connection loading and resolve them
+            for (int i = 0; i < allBlockEdits.Count; i++)
+            {
+                allBlockEdits[i].GetBlockPropertiesScript().allowLoadingLogicConnections = true;
+            }
+
+            for (int i = 0; i < allBlockEdits.Count; i++)
+            {
+                if (allBlockEdits[i].HasConnectors())
+                {
+                    allBlockEdits[i].LoadProperties();
+                }
+            }
+
+            return blocks;
+        }        
         
         public static ZeeplevelData Copy(ZeeplevelData original)
         {
@@ -293,8 +375,6 @@ namespace ZeeplevelToolkit
             copy.level.Path = original.level.Path;
 
             return copy;
-        }
-
-        
+        }        
     }
 }

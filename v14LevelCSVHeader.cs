@@ -94,7 +94,7 @@ namespace ZeeplevelToolkit
 
                     for (int j = 0; j < 8; j++)
                     {
-                        CameraProperties[j] = ParseUtil.ParseFloat(values[j]);
+                        CameraProperties[j] = ToolkitUtils.ParseFloat(values[j]);
                     }
                 }
                 else if (i == 2)
@@ -105,18 +105,18 @@ namespace ZeeplevelToolkit
                         break;
                     }
 
-                    AuthorTime = ParseUtil.ParseFloat(values[0]);
+                    AuthorTime = ToolkitUtils.ParseFloat(values[0]);
                     AuthorTimeString = AuthorTime == 0 ? "invalid track" : "";
 
-                    GoldTime = ParseUtil.ParseFloat(values[1]);
-                    SilverTime = ParseUtil.ParseFloat(values[2]);
-                    BronzeTime = ParseUtil.ParseFloat(values[3]);
-                    Skybox = ParseUtil.ParseInt(values[4]);
+                    GoldTime = ToolkitUtils.ParseFloat(values[1]);
+                    SilverTime = ToolkitUtils.ParseFloat(values[2]);
+                    BronzeTime = ToolkitUtils.ParseFloat(values[3]);
+                    Skybox = ToolkitUtils.ParseInt(values[4]);
                     if (Skybox == -1) 
                     { 
                         Skybox = 0; 
                     }
-                    Floor = ParseUtil.ParseInt(values[5]);
+                    Floor = ToolkitUtils.ParseInt(values[5]);
                 }
             }
         }

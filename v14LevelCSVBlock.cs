@@ -44,15 +44,15 @@ namespace ZeeplevelToolkit
 
             try
             {
-                BlockID = ParseUtil.ParseInt(values[0]);
-                Position = new Vector3(ParseUtil.ParseFloat(values[1]), ParseUtil.ParseFloat(values[2]), ParseUtil.ParseFloat(values[3]));
-                Rotation = new Vector3(ParseUtil.ParseFloat(values[4]), ParseUtil.ParseFloat(values[5]), ParseUtil.ParseFloat(values[6]));
-                Scale = new Vector3(ParseUtil.ParseFloat(values[7]), ParseUtil.ParseFloat(values[8]), ParseUtil.ParseFloat(values[9]));
+                BlockID = ToolkitUtils.ParseInt(values[0]);
+                Position = new Vector3(ToolkitUtils.ParseFloat(values[1]), ToolkitUtils.ParseFloat(values[2]), ToolkitUtils.ParseFloat(values[3]));
+                Rotation = new Vector3(ToolkitUtils.ParseFloat(values[4]), ToolkitUtils.ParseFloat(values[5]), ToolkitUtils.ParseFloat(values[6]));
+                Scale = new Vector3(ToolkitUtils.ParseFloat(values[7]), ToolkitUtils.ParseFloat(values[8]), ToolkitUtils.ParseFloat(values[9]));
 
                 Properties = new List<float>();
                 for (int i = 1; i < values.Length; i++)
                 {
-                    Properties.Add(ParseUtil.ParseFloat(values[i]));
+                    Properties.Add(ToolkitUtils.ParseFloat(values[i]));
                 }
 
                 IsValid = true;
