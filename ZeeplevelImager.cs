@@ -150,7 +150,6 @@ namespace ZeeplevelToolkit
             {
                 GameObject go = bp.gameObject;
                 go.transform.SetParent(subjectHolder, false);
-                GameObject.Destroy(bp); // Keep only mesh for preview
                 objects.Add(go);
             }
 
@@ -159,6 +158,7 @@ namespace ZeeplevelToolkit
                 return;
             }
 
+            ToolkitUtils.CleanGameObject(subjectHolder.gameObject);
             Bounds bounds = ToolkitUtils.CalculateBounds(objects);
 
             float scaleFactor = 64f / bounds.size.magnitude;

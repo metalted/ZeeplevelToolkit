@@ -25,6 +25,11 @@ namespace ZeeplevelToolkit
 
         private void Update()
         {
+            //DoTest();
+        }
+
+        private void DoTest()
+        { 
             // L = List Levels
             if (Input.GetKeyDown(KeyCode.L))
             {
