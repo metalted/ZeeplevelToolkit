@@ -9,7 +9,7 @@ using static Steamworks.InventoryItem;
 
 namespace ZeeplevelToolkit
 {
-    public enum BlockScalingMode
+    public enum ScalingStyle
     {
         Percentage,
         PercentageInPlace,
@@ -17,10 +17,22 @@ namespace ZeeplevelToolkit
         UnitInPlace
     }
 
+    public enum Axis
+    {
+        X,
+        Y,
+        Z,
+        XY,
+        YZ,
+        XZ,
+        XYZ
+    }
+
     public class EditorOperations
     {
         private static readonly Vector3[] directions = { Vector3.right, Vector3.up, Vector3.forward };
 
+        // --- Movement ---
         public static void MoveSelection(LEV_LevelEditorCentral central, Vector3 move)
         {
             if (central == null)
@@ -75,6 +87,7 @@ namespace ZeeplevelToolkit
             central.validation.BreakLock(collection, "Gizmo1");
         }
 
+        // --- Rotation ---
         public static void RotateSelection(LEV_LevelEditorCentral central, Vector3 up, float angle)
         {
             if (central == null)
@@ -127,7 +140,8 @@ namespace ZeeplevelToolkit
             central.validation.BreakLock(collection, "Gizmo1");
         }
 
-        public static void ScaleSelection(LEV_LevelEditorCentral central, Vector3 axis, float amount, BlockScalingMode scalingMode)
+        // --- Scaling ---
+        public static void ScaleSelection(LEV_LevelEditorCentral central, Axis axis, float amount, ScalingStyle scalingStyle)
         {
             if (central == null)
             {
@@ -139,28 +153,23 @@ namespace ZeeplevelToolkit
                 return;
             }
 
-            if (axis == Vector3.zero)
+            switch (scalingStyle)
             {
-                return;
-            }
-
-            switch (scalingMode)
-            {
-                case BlockScalingMode.Percentage:
+                case ScalingStyle.Percentage:
                     ScaleByPercentage(central, central.selection.list, axis, amount, false);
                     break;
-                case BlockScalingMode.PercentageInPlace:
+                case ScalingStyle.PercentageInPlace:
                     ScaleByPercentage(central, central.selection.list, axis, amount, true);
                     break;
-                case BlockScalingMode.Unit:
+                case ScalingStyle.Unit:
                     ScaleByUnit(central, central.selection.list, axis, amount, false);
                     break;
-                case BlockScalingMode.UnitInPlace:
+                case ScalingStyle.UnitInPlace:
                     ScaleByUnit(central, central.selection.list, axis, amount, true);
                     break;
             }
         }
-        public static void ScaleByPercentage(LEV_LevelEditorCentral central, List<BlockProperties> blockList, Vector3 axis, float percentage, bool inPlace)
+        public static void ScaleByPercentage(LEV_LevelEditorCentral central, List<BlockProperties> blockList, Axis axis, float percentage, bool inPlace)
         {
             if (central == null)
             {
@@ -173,10 +182,6 @@ namespace ZeeplevelToolkit
             }
 
             Vector3Int mask = ToolkitUtils.ToBinaryMask(axis);
-            if (mask == Vector3Int.zero)
-            {
-                return;
-            }
 
             UndoRedoRegistration registration = new UndoRedoRegistration(central);
             registration.SetBefore(blockList);
@@ -221,7 +226,7 @@ namespace ZeeplevelToolkit
 
                     for (int i = 0; i < 3; i++)
                     {
-                        if (axis[i] <= 0)
+                        if (mask[i] <= 0)
                         {
                             continue;
                         }
@@ -254,7 +259,7 @@ namespace ZeeplevelToolkit
             Change_Collection collection = registration.CreateCollection();
             central.validation.BreakLock(collection, "Gizmo1");
         }
-        public static void ScaleByUnit(LEV_LevelEditorCentral central, List<BlockProperties> blockList, Vector3 axis, float units, bool inPlace)
+        public static void ScaleByUnit(LEV_LevelEditorCentral central, List<BlockProperties> blockList, Axis axis, float units, bool inPlace)
         {
             if(central == null)
             {
@@ -267,33 +272,123 @@ namespace ZeeplevelToolkit
             }
 
             Vector3Int mask = ToolkitUtils.ToBinaryMask(axis);
-            if(mask == Vector3Int.zero)
+
+            UndoRedoRegistration registration = new UndoRedoRegistration(central);
+            registration.SetBefore(blockList);
+
+            Vector3 center = ToolkitUtils.GetCenterPosition(blockList);
+
+            if(mask == Vector3Int.one)
             {
-                return;
+                foreach(BlockProperties block in blockList)
+                {
+                    Vector3 pos = block.transform.position - center;
+                    Vector3 currentScale = block.transform.localScale;
+
+                    Vector3 newScale = new Vector3(
+                        ApplyUnitStep(currentScale.x, units),
+                        ApplyUnitStep(currentScale.y, units),
+                        ApplyUnitStep(currentScale.z, units)
+                    );
+
+                    Vector3 ratios = new Vector3(
+                        currentScale.x == 0f ? 1f : newScale.x / currentScale.x,
+                        currentScale.y == 0f ? 1f : newScale.y / currentScale.y,
+                        currentScale.z == 0f ? 1f : newScale.z / currentScale.z
+                    );
+
+                    pos = Vector3.Scale(pos, ratios);
+
+                    if (!inPlace)
+                    {
+                        block.transform.position = pos + center;
+                    }
+
+                    block.transform.localScale = newScale;
+                    block.SomethingChanged();
+                }
+            }
+            else
+            {
+                foreach(BlockProperties block in blockList)
+                {
+                    Vector3 pos = block.transform.position - center;
+                    Vector3 currentScale = block.transform.localScale;
+                    Vector3 newScale = currentScale;
+
+                    Vector3[] convertedVectors = ToolkitUtils.ConvertLocalToWorldVectors(block.transform);
+
+                    for (int i = 0; i < 3; i++)
+                    {
+                        if (mask[i] <= 0f)
+                            continue;
+
+                        if (convertedVectors[0] == directions[i])
+                        {
+                            float old = currentScale.x;
+                            float ns = ApplyUnitStep(old, units);
+                            newScale.x = ns;
+
+                            float ratio = old == 0f ? 1f : ns / old;
+                            pos[i] *= ratio;
+                        }
+                        else if (convertedVectors[1] == directions[i])
+                        {
+                            float old = currentScale.y;
+                            float ns = ApplyUnitStep(old, units);
+                            newScale.y = ns;
+
+                            float ratio = old == 0f ? 1f : ns / old;
+                            pos[i] *= ratio;
+                        }
+                        else if (convertedVectors[2] == directions[i])
+                        {
+                            float old = currentScale.z;
+                            float ns = ApplyUnitStep(old, units);
+                            newScale.z = ns;
+
+                            float ratio = old == 0f ? 1f : ns / old;
+                            pos[i] *= ratio;
+                        }
+                    }
+
+                    if(!inPlace)
+                    {
+                        block.transform.position = pos + center;
+                    }
+                    
+                    block.transform.localScale = newScale;
+                    block.SomethingChanged();
+                }
             }
 
-            //Get from bpx 18 project.
+            registration.GenerateAfter();
+            Change_Collection collection = registration.CreateCollection();
+            central.validation.BreakLock(collection, "Gizmo1");
         }
         private static float ApplyUnitStep(float current, float amount)
         {
             float sign = current < 0f ? -1f : 1f;
-            float absCurrent = Mathf.Abs(current);
-            float step = Mathf.Abs(amount);
 
+            float absCurrent = Mathf.Abs(current);
+            float absStep = Mathf.Abs(amount);
+
+            // Growing
             if (amount > 0f)
             {
-                float increased = absCurrent + step;
-                return SnapToUnit(increased * sign, step);
+                float result = (absCurrent + absStep) * sign;
+                return SnapToUnit(result, absStep);
             }
-            else
-            {
-                float decreased = absCurrent - step;
 
-                if (decreased < step)
-                    decreased = step;
+            // Shrinking
+            float absNew = absCurrent - absStep;
 
-                return SnapToUnit(decreased * sign, step);
-            }
+            if (absNew < absStep)
+                absNew = absStep;
+
+            float final = absNew * sign;
+
+            return SnapToUnit(final, absStep);
         }
         private static float SnapToUnit(float value, float unit)
         {
@@ -303,12 +398,16 @@ namespace ZeeplevelToolkit
                 return value;
 
             float sign = value < 0f ? -1f : 1f;
-            float snapped = Mathf.Round(Mathf.Abs(value) / absUnit) * absUnit;
+
+            float absValue = Mathf.Abs(value);
+
+            float snapped = Mathf.Round(absValue / absUnit) * absUnit;
 
             return snapped * sign;
         }
 
-        public static void MirrorSelection(LEV_LevelEditorCentral central, Vector3 axis)
+        // --- Mirroring ---
+        public static void MirrorSelection(LEV_LevelEditorCentral central, Axis axis)
         {
             if(central == null)
             {
@@ -320,14 +419,9 @@ namespace ZeeplevelToolkit
                 return;
             }
 
-            if(axis == Vector3.zero)
-            {
-                return;
-            }
-
             Mirror(central, central.selection.list, axis);
         }
-        public static void Mirror(LEV_LevelEditorCentral central, List<BlockProperties> blockList, Vector3 axis)
+        public static void Mirror(LEV_LevelEditorCentral central, List<BlockProperties> blockList, Axis axis)
         {
             if(central == null)
             {
@@ -340,10 +434,6 @@ namespace ZeeplevelToolkit
             }
 
             Vector3Int mask = ToolkitUtils.ToBinaryMask(axis);
-            if(mask == Vector3Int.zero)
-            {
-                return;
-            }
 
             UndoRedoRegistration registration = new UndoRedoRegistration(central);
             registration.SetBefore(blockList);

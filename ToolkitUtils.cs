@@ -155,6 +155,21 @@ namespace ZeeplevelToolkit
             );
         }
 
+        public static Vector3Int ToBinaryMask(Axis axis)
+        {
+            switch(axis)
+            {
+                case Axis.X: return Vector3Int.right;
+                case Axis.Y: return Vector3Int.up;
+                case Axis.Z: return Vector3Int.forward;
+                case Axis.XY: return new Vector3Int(1, 1, 0);
+                case Axis.YZ: return new Vector3Int(0, 1, 1);
+                case Axis.XZ: return new Vector3Int(1, 0, 1);
+                default:
+                case Axis.XYZ: return Vector3Int.one;
+            }
+        }
+
         public static Vector3[] ConvertLocalToWorldVectors(Transform local)
         {
             Vector3[] xDirections = GetSortedDirections(local.right);
