@@ -158,7 +158,7 @@ namespace ZeeplevelToolkit
                 return;
             }
 
-            ToolkitUtils.CleanGameObject(subjectHolder.gameObject);
+            ToolkitUtils.CleanGameObject(subjectHolder.gameObject, true);
             Bounds bounds = ToolkitUtils.CalculateBounds(objects);
 
             float scaleFactor = 64f / bounds.size.magnitude;

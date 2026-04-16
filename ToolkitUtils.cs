@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using TMPro;
 using UnityEngine;
 
 namespace ZeeplevelToolkit
@@ -267,10 +268,11 @@ namespace ZeeplevelToolkit
             return directions;
         }
 
-        public static void CleanGameObject(GameObject obj)
+        public static void CleanGameObject(GameObject obj, bool allowColliders = false)
         {
             Component[] objectComponents = obj.GetComponents(typeof(Component));
             Component[] childComponents = obj.GetComponentsInChildren(typeof(Component));
+            
             objectComponents = objectComponents.Concat(childComponents).ToArray();
 
             foreach (Component c in objectComponents)
@@ -283,6 +285,11 @@ namespace ZeeplevelToolkit
                 }
 
                 bool keep = (c.GetType() == typeof(Transform)) || (c.GetType() == typeof(MeshFilter)) || (c.GetType() == typeof(MeshRenderer)) || (c.GetType() == typeof(RectTransform)) || (c.GetType() == typeof(Rigidbody)) || (c.GetType() == typeof(Light)) || (c.GetType() == typeof(HxVolumetricLight)) || (c.GetType() == typeof(TextMeshPro));
+
+                if(allowColliders)
+                {
+                    keep = keep || c is Collider;
+                }
 
                 if (!keep)
                 {
