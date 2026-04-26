@@ -8,6 +8,34 @@ namespace ZeeplevelToolkit
 {
     public static class ToolkitUtils
     {
+        public static string GetPlayerName(string defaultName = "Bouwerman")
+        {
+            string playerName = defaultName;
+            try
+            {
+                playerName = PlayerManager.Instance.steamAchiever.GetPlayerNameNoTag(true);
+                return playerName;
+            }
+            catch
+            {
+                return playerName;
+            }
+        }
+
+        public static Vector3 EditorCameraPosition(LEV_LevelEditorCentral central)
+        {
+            return central.cam.transform.position;
+        }
+
+        public static Vector3 BlocksAtCameraGridMovement(LEV_LevelEditorCentral central, List<BlockProperties> blocks)
+        {
+            Bounds bounds = CalculateBounds(blocks);
+            Vector3 cameraGridPosition = ClosestGridPosition(EditorCameraPosition(central));
+            Vector3 blocksGridPosition = ClosestGridPosition(bounds.center);
+            Vector3 move = cameraGridPosition - blocksGridPosition;
+            return move;
+        }
+
         public static int ParseInt(string value)
         {
             return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int result) ? result : -1;
@@ -268,7 +296,7 @@ namespace ZeeplevelToolkit
             return directions;
         }
 
-        public static void CleanGameObject(GameObject obj, bool allowColliders = false)
+        public static void CleanGameObject(GameObject obj, bool keepCollisions = false)
         {
             Component[] objectComponents = obj.GetComponents(typeof(Component));
             Component[] childComponents = obj.GetComponentsInChildren(typeof(Component));
@@ -286,9 +314,15 @@ namespace ZeeplevelToolkit
 
                 bool keep = (c.GetType() == typeof(Transform)) || (c.GetType() == typeof(MeshFilter)) || (c.GetType() == typeof(MeshRenderer)) || (c.GetType() == typeof(RectTransform)) || (c.GetType() == typeof(Rigidbody)) || (c.GetType() == typeof(Light)) || (c.GetType() == typeof(HxVolumetricLight)) || (c.GetType() == typeof(TextMeshPro));
 
-                if(allowColliders)
+                if(c is Collider collider)
                 {
-                    keep = keep || c is Collider;
+                    if(keepCollisions)
+                    {
+                        continue;
+                    }
+
+                    collider.enabled = false;
+                    continue;
                 }
 
                 if (!keep)

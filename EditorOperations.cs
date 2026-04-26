@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UIElements;
-using static Steamworks.InventoryItem;
 
 namespace ZeeplevelToolkit
 {
@@ -26,6 +20,20 @@ namespace ZeeplevelToolkit
         YZ,
         XZ,
         XYZ
+    }
+
+    public class BlockDescription
+    {
+        public int blockID;
+        public Vector3 position;
+        public Quaternion rotation;
+
+        public BlockDescription(int blockID, Vector3 position, Quaternion rotation)
+        {
+            this.blockID = blockID;
+            this.position = position;
+            this.rotation = rotation;
+        }
     }
 
     public class EditorOperations
@@ -187,13 +195,13 @@ namespace ZeeplevelToolkit
             registration.SetBefore(blockList);
 
             Vector3 center = ToolkitUtils.GetCenterPosition(blockList);
-            float multiplier = 1f + (percentage / 100f);
+            float multiplier = percentage;
 
             if (mask == Vector3Int.one)
             {
                 foreach (BlockProperties block in blockList)
                 {
-                    if(!inPlace)
+                    if (!inPlace)
                     {
                         Vector3 pos = block.transform.position;
                         pos -= center;
@@ -201,7 +209,7 @@ namespace ZeeplevelToolkit
                         pos += center;
                         block.transform.position = pos;
                     }
-                   
+
                     block.transform.localScale *= multiplier;
                     block.SomethingChanged();
 
@@ -261,12 +269,12 @@ namespace ZeeplevelToolkit
         }
         public static void ScaleByUnit(LEV_LevelEditorCentral central, List<BlockProperties> blockList, Axis axis, float units, bool inPlace)
         {
-            if(central == null)
+            if (central == null)
             {
                 return;
             }
 
-            if(blockList.Count == 0)
+            if (blockList.Count == 0)
             {
                 return;
             }
@@ -278,9 +286,9 @@ namespace ZeeplevelToolkit
 
             Vector3 center = ToolkitUtils.GetCenterPosition(blockList);
 
-            if(mask == Vector3Int.one)
+            if (mask == Vector3Int.one)
             {
-                foreach(BlockProperties block in blockList)
+                foreach (BlockProperties block in blockList)
                 {
                     Vector3 pos = block.transform.position - center;
                     Vector3 currentScale = block.transform.localScale;
@@ -310,7 +318,7 @@ namespace ZeeplevelToolkit
             }
             else
             {
-                foreach(BlockProperties block in blockList)
+                foreach (BlockProperties block in blockList)
                 {
                     Vector3 pos = block.transform.position - center;
                     Vector3 currentScale = block.transform.localScale;
@@ -352,11 +360,11 @@ namespace ZeeplevelToolkit
                         }
                     }
 
-                    if(!inPlace)
+                    if (!inPlace)
                     {
                         block.transform.position = pos + center;
                     }
-                    
+
                     block.transform.localScale = newScale;
                     block.SomethingChanged();
                 }
@@ -409,12 +417,12 @@ namespace ZeeplevelToolkit
         // --- Mirroring ---
         public static void MirrorSelection(LEV_LevelEditorCentral central, Axis axis)
         {
-            if(central == null)
+            if (central == null)
             {
                 return;
             }
 
-            if(central.selection.list.Count == 0)
+            if (central.selection.list.Count == 0)
             {
                 return;
             }
@@ -423,12 +431,12 @@ namespace ZeeplevelToolkit
         }
         public static void Mirror(LEV_LevelEditorCentral central, List<BlockProperties> blockList, Axis axis)
         {
-            if(central == null)
+            if (central == null)
             {
                 return;
             }
 
-            if(blockList.Count == 0)
+            if (blockList.Count == 0)
             {
                 return;
             }
@@ -477,6 +485,176 @@ namespace ZeeplevelToolkit
 
             Change_Collection collection = registration.CreateCollection();
             central.validation.BreakLock(collection, "Gizmo1");
+        }
+
+        // --- Creation ---
+        public static List<BlockProperties> CreateFromDescriptions(LEV_LevelEditorCentral central, List<BlockDescription> description)
+        {
+            if (central == null || description == null || description.Count == 0)
+            {
+                return null;
+            }
+
+            central.selection.DeselectAllBlocks(true, "EditorOperations");
+
+            List<BlockProperties> blockList = new List<BlockProperties>();
+            foreach (BlockDescription d in description)
+            {
+                if (d.blockID < 0 || d.blockID >= PlayerManager.Instance.loader.globalBlockList.blocks.Count)
+                {
+                    continue;
+                }
+
+                BlockProperties bp = GameObject.Instantiate<BlockProperties>(central.inspector.globalBlockList.blocks[d.blockID]);
+                bp.isBeingCreated = true;
+                bp.gameObject.name = central.inspector.globalBlockList.blocks[d.blockID].gameObject.name;
+                bp.UID = central.manager.GenerateUniqueIDforBlocks(d.blockID.ToString());
+                bp.isEditor = true;
+                bp.NewBlockCreatedFromEditorForV15JSON();
+                bp.CreateBlock();
+
+                StaticConnectorTracker.AddBlockToTracker(bp, "CreateFromDescription");
+                for (int i = 0; i < bp.propertyScripts.Count; i++)
+                {
+                    bp.propertyScripts[i].CreateBlock(bp);
+                }
+
+                bp.DrawDebugUID();
+
+                bp.transform.position = d.position;
+                bp.transform.rotation = d.rotation;
+                bp.SomethingChanged();
+                bp.isBeingCreated = false;
+
+                blockList.Add(bp);
+            }
+
+            UndoRedoRegistration registration = new UndoRedoRegistration(central);
+            registration.SetBefore(blockList.Count);
+            registration.blockList.AddRange(blockList);
+
+            registration.GenerateAfter();
+
+            Change_Collection collection = registration.CreateCollection();
+            central.validation.BreakLock(collection, "Toolkit");
+            central.selection.UndoRedoReselection(registration.blockList);
+
+            return blockList;
+        }
+        public static GameObject CreateGhostBlock(LEV_LevelEditorCentral central, BlockPropertyJSON block)
+        {
+            if (block.i < 0 || block.i >= PlayerManager.Instance.loader.globalBlockList.blocks.Count)
+            {
+                return null;
+            }
+
+            BlockProperties bp = GameObject.Instantiate<BlockProperties>(central.inspector.globalBlockList.blocks[block.i]);
+            bp.isBeingCreated = true;
+            bp.gameObject.name = central.inspector.globalBlockList.blocks[block.i].gameObject.name;
+            bp.isEditor = true;
+            bp.CreateBlock();
+            bp.properties.Clear();
+            bp.LoadProperties_v15(block, false);
+
+            GameObject b = bp.gameObject;
+
+            ToolkitUtils.CleanGameObject(b);
+            return b;
+        }
+
+        //Actions
+        public static void DeselectAllBlocks(LEV_LevelEditorCentral central)
+        {
+            central.selection.DeselectAllBlocks(true, nameof(central.selection.ClickNothing));
+        }
+
+        public static bool AnyObjectsSelected(LEV_LevelEditorCentral central)
+        {
+            return central.selection.list.Count > 0;
+        }
+
+        public static List<BlockProperties> GetSelectedBlocks(LEV_LevelEditorCentral central)
+        {
+            return central.selection.list;
+        }
+
+        public static bool InBlockMovementMode(LEV_LevelEditorCentral central)
+        {
+            if (central.tool.currentTool != 0)
+            {
+                return false;
+            }
+
+            if (central.gizmos.dragButton.isSelected)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool InBlockRotationMode(LEV_LevelEditorCentral central)
+        {
+            if (central.tool.currentTool != 0)
+            {
+                return false;
+            }
+
+            if (central.gizmos.rotateButton.isSelected)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool InEditMode(LEV_LevelEditorCentral central)
+        {
+            return central.tool.currentTool == 0;
+        }
+
+        public static bool InPaintMode(LEV_LevelEditorCentral central)
+        {
+            return central.tool.currentTool == 1;
+        }
+        public static bool InTreegunMode(LEV_LevelEditorCentral central)
+        {
+            return central.tool.currentTool == 2;
+        }
+
+        public static bool InUIPanelMode(LEV_LevelEditorCentral central)
+        {
+            return central.tool.currentTool == 3;
+        }
+
+        public static bool InSkyboxMode(LEV_LevelEditorCentral central)
+        {
+            return central.tool.currentTool == 4;
+        }
+
+        public static bool InConnectionMode(LEV_LevelEditorCentral central)
+        {
+            return central.tool.currentTool == 5;
+        }
+
+        public static bool InEditPipetteMode(LEV_LevelEditorCentral central)
+        {
+            return central.tool.currentTool == 6;
+        }
+
+        public static bool IsDragging(LEV_LevelEditorCentral central)
+        {
+            return central.gizmos.isDragging;
+        }
+
+        public static bool IsInGMode(LEV_LevelEditorCentral central)
+        {
+            return central.gizmos.isGrabbing;
+        }
+
+        public static bool IsInputBlocked(LEV_LevelEditorCentral central)
+        {
+            return central.input.inputLocked;
         }
     }
 }

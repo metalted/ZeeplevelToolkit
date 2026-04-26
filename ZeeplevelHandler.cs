@@ -171,7 +171,7 @@ namespace ZeeplevelToolkit
             return data;
         }
         
-        public static List<BlockProperties> LoadIntoEditor(ZeeplevelData data, LEV_LevelEditorCentral central)
+        public static List<BlockProperties> LoadIntoEditor(ZeeplevelData data, LEV_LevelEditorCentral central, bool reUID = true)
         {
             List<BlockProperties> blockList = new List<BlockProperties>();
 
@@ -193,7 +193,7 @@ namespace ZeeplevelToolkit
                     loadType = "v14";
                     break;
                 case ZeeplevelData.DataType.JSON:
-                    blockList = LoadBlocks(data.json);
+                    blockList = LoadBlocks(data.json, false, reUID);
                     loadType = "v15";
                     break;
             }
@@ -253,11 +253,11 @@ namespace ZeeplevelToolkit
             return blocks;
         }
 
-        public static List<BlockProperties> LoadBlocks(v15LevelJSON json, bool isVisualOnly = false)
+        public static List<BlockProperties> LoadBlocks(v15LevelJSON json, bool isVisualOnly = false, bool reUID = true)
         {
             List<BlockPropertyJSON> jsonBlocks;
             
-            if(isVisualOnly)
+            if(isVisualOnly || !reUID)
             {
                 jsonBlocks = json.blox;
             }
