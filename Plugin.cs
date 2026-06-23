@@ -5,13 +5,13 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
-namespace ZeeplevelToolkit
+namespace Toolkist
 {
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string PLUGIN_GUID = "com.metalted.zeepkist.zeepleveltoolkit";
-        public const string PLUGIN_NAME = "ZeeplevelToolkit";
+        public const string PLUGIN_GUID = "com.metalted.zeepkist.toolkist";
+        public const string PLUGIN_NAME = "Toolkist";
         public const string PLUGIN_VERSION = "1.0";
 
         public void Awake()

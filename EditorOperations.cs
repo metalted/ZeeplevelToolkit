@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-namespace ZeeplevelToolkit
+namespace Toolkist
 {
     public enum ScalingStyle
     {

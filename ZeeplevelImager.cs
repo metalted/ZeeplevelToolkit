@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace ZeeplevelToolkit
+namespace Toolkist
 {
     public class ZeeplevelImager : MonoBehaviour
     {

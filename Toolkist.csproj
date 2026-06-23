@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
-    <AssemblyName>ZeeplevelToolkit</AssemblyName>
-    <Description>ZeeplevelToolkit</Description>
+    <AssemblyName>Toolkist</AssemblyName>
+    <Description>Toolkist</Description>
     <Version>1.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
