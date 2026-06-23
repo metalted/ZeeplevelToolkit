@@ -56,7 +56,7 @@ namespace Toolkist
             return LEV_UndoRedo.GetJSONblock(LEV_UndoRedo.GetJSONstring(block));
         }
 
-        public static void ReUID(List<BlockPropertyJSON> jsonBlocks)
+        /*public static void ReUID(List<BlockPropertyJSON> jsonBlocks)
         {
             Dictionary<string, string> uidRemapping = new Dictionary<string, string>();
 
@@ -112,6 +112,173 @@ namespace Toolkist
 
                 props.t = tNew;
             }
+        }*/
+
+        public static void ReUID(List<BlockPropertyJSON> jsonBlocks)
+        {
+            Dictionary<string, string> uidRemapping = new Dictionary<string, string>();
+
+            // 1) Re-UID all blocks and build remap table
+            foreach (BlockPropertyJSON j in jsonBlocks)
+            {
+                string oldUID = j.u;
+                string newUID = PlayerManager.Instance.GenerateUniqueIDforBlocks(j.i.ToString());
+
+                j.u = newUID;
+
+                if (!string.IsNullOrEmpty(oldUID))
+                {
+                    if (!uidRemapping.ContainsKey(oldUID))
+                    {
+                        uidRemapping.Add(oldUID, newUID);
+                    }
+                    else
+                    {
+                        Debug.LogWarning("ReUID: duplicate old UID found: " + oldUID);
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("ReUID: block had empty old UID. New UID: " + newUID);
+                }
+            }
+
+            // 2) Remap connections and repair connection counters
+            foreach (BlockPropertyJSON j in jsonBlocks)
+            {
+                PropertyDictionariesJSON props = j.d;
+
+                if (props == null || props.t == null)
+                    continue;
+
+                Dictionary<string, string> tNew = new Dictionary<string, string>();
+
+                // pin id -> list of surviving serialized connections
+                Dictionary<string, List<KeyValuePair<int, string>>> connectionsByPin =
+                    new Dictionary<string, List<KeyValuePair<int, string>>>();
+
+                // Pins that had connection-style keys before cleanup.
+                HashSet<string> touchedPins = new HashSet<string>();
+
+                foreach (KeyValuePair<string, string> kvp in props.t)
+                {
+                    string pinKey;
+                    int connectionIndex;
+
+                    // Not a connection entry, for example "oi2": "0"
+                    if (!TryParseConnectionKey(kvp.Key, out pinKey, out connectionIndex))
+                    {
+                        tNew[kvp.Key] = kvp.Value;
+                        continue;
+                    }
+
+                    touchedPins.Add(pinKey);
+
+                    if (string.IsNullOrEmpty(kvp.Value))
+                    {
+                        Debug.LogWarning("ReUID: removed empty connection value. Key: " + kvp.Key);
+                        continue;
+                    }
+
+                    try
+                    {
+                        ConnectionStruct connection = new ConnectionStruct(kvp.Value);
+
+                        if (string.IsNullOrEmpty(connection.targetUID))
+                        {
+                            Debug.LogWarning("ReUID: removed connection with empty target UID. Key: " + kvp.Key);
+                            continue;
+                        }
+
+                        string remappedUID;
+
+                        if (!uidRemapping.TryGetValue(connection.targetUID, out remappedUID))
+                        {
+                            Debug.LogWarning(
+                                "ReUID: removed orphaned connection. " +
+                                "Key: " + kvp.Key +
+                                " | Missing target UID: " + connection.targetUID
+                            );
+
+                            continue;
+                        }
+
+                        connection.targetUID = remappedUID;
+
+                        if (!connectionsByPin.ContainsKey(pinKey))
+                        {
+                            connectionsByPin.Add(pinKey, new List<KeyValuePair<int, string>>());
+                        }
+
+                        connectionsByPin[pinKey].Add(
+                            new KeyValuePair<int, string>(connectionIndex, connection.Serialize())
+                        );
+                    }
+                    catch
+                    {
+                        Debug.LogWarning("ReUID: removed invalid connection entry. Key: " + kvp.Key);
+                    }
+                }
+
+                // 3) Rebuild connection keys compactly: id3-0, id3-1, id3-2, ...
+                foreach (KeyValuePair<string, List<KeyValuePair<int, string>>> group in connectionsByPin)
+                {
+                    string pinKey = group.Key;
+                    List<KeyValuePair<int, string>> connections = group.Value;
+
+                    connections.Sort((a, b) => a.Key.CompareTo(b.Key));
+
+                    for (int i = 0; i < connections.Count; i++)
+                    {
+                        string newConnectionKey = pinKey + "-" + i;
+                        tNew[newConnectionKey] = connections[i].Value;
+                    }
+                }
+
+                // 4) Repair d.n counters for every pin we touched
+                if (props.n != null)
+                {
+                    foreach (string pinKey in touchedPins)
+                    {
+                        int count = 0;
+
+                        if (connectionsByPin.ContainsKey(pinKey))
+                        {
+                            count = connectionsByPin[pinKey].Count;
+                        }
+
+                        props.n[pinKey] = count;
+                    }
+                }
+
+                props.t = tNew;
+            }
+        }
+
+        private static bool TryParseConnectionKey(string key, out string pinKey, out int connectionIndex)
+        {
+            pinKey = null;
+            connectionIndex = -1;
+
+            if (string.IsNullOrEmpty(key))
+                return false;
+
+            int dashIndex = key.LastIndexOf('-');
+
+            if (dashIndex <= 0 || dashIndex >= key.Length - 1)
+                return false;
+
+            string left = key.Substring(0, dashIndex);
+            string right = key.Substring(dashIndex + 1);
+
+            int parsedIndex;
+
+            if (!int.TryParse(right, out parsedIndex))
+                return false;
+
+            pinKey = left;
+            connectionIndex = parsedIndex;
+            return true;
         }
 
         public static Bounds CalculateBounds(List<GameObject> objs)
