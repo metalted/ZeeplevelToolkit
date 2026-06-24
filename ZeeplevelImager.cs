@@ -42,7 +42,7 @@ namespace Toolkist
             background.Rotate(-90, 0, 0);
 
             Material backgroundMaterial = new Material(Shader.Find("Unlit/Color"));
-            backgroundMaterial.color = Color.black;
+            backgroundMaterial.color = new Color32(3, 3, 3, 255);
             background.gameObject.GetComponent<Renderer>().material = backgroundMaterial;
             background.localScale = new Vector3(75f, 75f, 75f);
 
@@ -205,6 +205,68 @@ namespace Toolkist
             subjectHolder = new GameObject("Subject Holder").transform;
             subjectHolder.parent = subjectPivot;
             subjectHolder.localPosition = Vector3.zero;
+        }
+
+        public static Sprite MakeImagerBackgroundTransparent(Sprite source)
+        {
+            if (source == null)
+                return null;
+
+            Texture2D sourceTexture = source.texture;
+
+            Rect rect = source.rect;
+
+            int x = Mathf.RoundToInt(rect.x);
+            int y = Mathf.RoundToInt(rect.y);
+            int width = Mathf.RoundToInt(rect.width);
+            int height = Mathf.RoundToInt(rect.height);
+
+            Texture2D newTexture = new Texture2D(
+                width,
+                height,
+                TextureFormat.RGBA32,
+                false
+            );
+
+            Color32[] pixels = sourceTexture.GetPixels32();
+            Color32[] newPixels = new Color32[width * height];
+
+            int sourceWidth = sourceTexture.width;
+
+            for (int py = 0; py < height; py++)
+            {
+                for (int px = 0; px < width; px++)
+                {
+                    int sourceIndex = (y + py) * sourceWidth + (x + px);
+                    int targetIndex = py * width + px;
+
+                    Color32 pixel = pixels[sourceIndex];
+
+                    if (pixel.r == 3 && pixel.g == 3 && pixel.b == 3)
+                    {
+                        pixel.a = 0;
+                    }
+
+                    newPixels[targetIndex] = pixel;
+                }
+            }
+
+            newTexture.SetPixels32(newPixels);
+            newTexture.Apply();
+
+            Vector2 pivot = new Vector2(
+                source.pivot.x / source.rect.width,
+                source.pivot.y / source.rect.height
+            );
+
+            Sprite newSprite = Sprite.Create(
+                newTexture,
+                new Rect(0, 0, width, height),
+                pivot,
+                source.pixelsPerUnit
+            );
+
+            return newSprite;
         }
     }
 }

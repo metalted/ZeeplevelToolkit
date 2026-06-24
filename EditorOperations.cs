@@ -656,5 +656,216 @@ namespace Toolkist
         {
             return central.input.inputLocked;
         }
+
+        //Compound blueprint placement
+        public static void PlaceBlueprint(
+    LEV_LevelEditorCentral central,
+    List<BlockProperties> blockList,
+    Vector3 surfacePoint,
+    Vector3 upVector,
+    float scale,
+    float liftFactor,
+    float axisRotationAngle)
+        {
+            if (central == null)
+                return;
+
+            if (blockList == null || blockList.Count == 0)
+                return;
+
+            if (upVector == Vector3.zero)
+                return;
+
+            upVector.Normalize();
+
+            UndoRedoRegistration registration = new UndoRedoRegistration(central);
+            registration.SetBefore(blockList);
+
+            // ------------------------------------------------------------
+            // 1. Scale first.
+            // This changes the bounds, so it must happen before placement.
+            // ------------------------------------------------------------
+
+            if (!Mathf.Approximately(scale, 1f))
+            {
+                ScaleBlocksUniformNoRegistration(blockList, scale);
+            }
+
+            // ------------------------------------------------------------
+            // 2. Move blueprint center to the target point.
+            // ------------------------------------------------------------
+
+            Bounds bounds = ToolkitUtils.CalculateBounds(blockList);
+            Vector3 moveToPoint = surfacePoint - bounds.center;
+
+            MoveBlocksNoRegistration(blockList, moveToPoint);
+
+            // ------------------------------------------------------------
+            // 3. Rotate blueprint world-up to the requested up vector.
+            // Pivot is the placement point.
+            // ------------------------------------------------------------
+
+            Quaternion upRotation = GetRotationFromUpToNormal(upVector);
+
+            if (upRotation != Quaternion.identity)
+            {
+                RotateBlocksAroundPivotNoRegistration(
+                    blockList,
+                    surfacePoint,
+                    upRotation
+                );
+            }
+
+            // ------------------------------------------------------------
+            // 4. Rotate around the final up vector.
+            // This is your random/tree rotation.
+            // ------------------------------------------------------------
+
+            if (!Mathf.Approximately(axisRotationAngle, 0f))
+            {
+                Quaternion axisRotation = Quaternion.AngleAxis(axisRotationAngle, upVector);
+
+                RotateBlocksAroundPivotNoRegistration(
+                    blockList,
+                    surfacePoint,
+                    axisRotation
+                );
+            }
+
+            // ------------------------------------------------------------
+            // 5. Move bottom toward/onto surface.
+            // liftFactor:
+            // 1.0 = bottom exactly on surface
+            // 0.5 = halfway toward surface
+            // 0.45 = slightly lower than halfway
+            // ------------------------------------------------------------
+
+            MoveBlueprintBottomToSurfaceNoRegistration(
+                blockList,
+                surfacePoint,
+                upVector,
+                liftFactor
+            );
+
+            // ------------------------------------------------------------
+            // 6. Mark changed once and register as one editor operation.
+            // ------------------------------------------------------------
+
+            foreach (BlockProperties block in blockList)
+            {
+                block.SomethingChanged();
+            }
+
+            Bounds finalBounds = ToolkitUtils.CalculateBounds(blockList);
+
+            if (central.gizmos != null && central.gizmos.motherGizmo != null)
+            {
+                central.gizmos.motherGizmo.position = finalBounds.center;
+            }
+
+            registration.GenerateAfter();
+
+            Change_Collection collection = registration.CreateCollection();
+            central.validation.BreakLock(collection, "Gizmo1");
+        }
+
+        private static void ScaleBlocksUniformNoRegistration(
+    List<BlockProperties> blockList,
+    float scale)
+        {
+            Vector3 center = ToolkitUtils.GetCenterPosition(blockList);
+
+            foreach (BlockProperties block in blockList)
+            {
+                Vector3 pos = block.transform.position;
+
+                pos -= center;
+                pos *= scale;
+                pos += center;
+
+                block.transform.position = pos;
+                block.transform.localScale *= scale;
+            }
+        }
+
+        private static void MoveBlocksNoRegistration(
+            List<BlockProperties> blockList,
+            Vector3 move)
+        {
+            if (move == Vector3.zero)
+                return;
+
+            foreach (BlockProperties block in blockList)
+            {
+                block.transform.position += move;
+            }
+        }
+
+        private static void RotateBlocksAroundPivotNoRegistration(
+            List<BlockProperties> blockList,
+            Vector3 pivot,
+            Quaternion rotation)
+        {
+            foreach (BlockProperties block in blockList)
+            {
+                Vector3 directionFromPivot = block.transform.position - pivot;
+
+                block.transform.position = pivot + rotation * directionFromPivot;
+                block.transform.rotation = rotation * block.transform.rotation;
+            }
+        }
+
+        private static Quaternion GetRotationFromUpToNormal(Vector3 upVector)
+        {
+            Vector3 from = Vector3.up;
+            Vector3 to = upVector.normalized;
+
+            float dot = Vector3.Dot(from, to);
+
+            if (dot > 0.9999f)
+                return Quaternion.identity;
+
+            if (dot < -0.9999f)
+                return Quaternion.AngleAxis(180f, Vector3.right);
+
+            return Quaternion.FromToRotation(from, to);
+        }
+
+        private static void MoveBlueprintBottomToSurfaceNoRegistration(
+            List<BlockProperties> blockList,
+            Vector3 surfacePoint,
+            Vector3 surfaceNormal,
+            float liftFactor)
+        {
+            Bounds bounds = ToolkitUtils.CalculateBounds(blockList);
+
+            surfaceNormal.Normalize();
+
+            float surfaceDistance = Vector3.Dot(surfacePoint, surfaceNormal);
+            float lowestDistance = GetLowestBoundsDistanceAlongAxis(bounds, surfaceNormal);
+
+            float moveDistance = surfaceDistance - lowestDistance;
+
+            moveDistance *= liftFactor;
+
+            Vector3 move = surfaceNormal * moveDistance;
+
+            MoveBlocksNoRegistration(blockList, move);
+        }
+
+        private static float GetLowestBoundsDistanceAlongAxis(Bounds bounds, Vector3 axis)
+        {
+            Vector3 center = bounds.center;
+            Vector3 extents = bounds.extents;
+
+            float centerDistance = Vector3.Dot(center, axis);
+
+            float projectedExtent =
+                Mathf.Abs(axis.x) * extents.x +
+                Mathf.Abs(axis.y) * extents.y +
+                Mathf.Abs(axis.z) * extents.z;
+
+            return centerDistance - projectedExtent;
+        }
     }
 }
