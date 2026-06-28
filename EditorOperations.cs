@@ -27,12 +27,14 @@ namespace Toolkist
         public int blockID;
         public Vector3 position;
         public Quaternion rotation;
+        public Vector3 scale;
 
-        public BlockDescription(int blockID, Vector3 position, Quaternion rotation)
+        public BlockDescription(int blockID, Vector3 position, Quaternion rotation, Vector3 scale)
         {
             this.blockID = blockID;
             this.position = position;
             this.rotation = rotation;
+            this.scale = scale;
         }
     }
 
@@ -523,6 +525,7 @@ namespace Toolkist
 
                 bp.transform.position = d.position;
                 bp.transform.rotation = d.rotation;
+                bp.transform.localScale = d.scale;
                 bp.SomethingChanged();
                 bp.isBeingCreated = false;
 
@@ -541,7 +544,8 @@ namespace Toolkist
 
             return blockList;
         }
-        public static GameObject CreateGhostBlock(LEV_LevelEditorCentral central, BlockPropertyJSON block)
+
+        public static GameObject CreateGhostBlock(LEV_LevelEditorCentral central, BlockPropertyJSON block, Material ghostMaterial = null)
         {
             if (block.i < 0 || block.i >= PlayerManager.Instance.loader.globalBlockList.blocks.Count)
             {
@@ -557,6 +561,54 @@ namespace Toolkist
             bp.LoadProperties_v15(block, false);
 
             GameObject b = bp.gameObject;
+
+            if(ghostMaterial != null)
+            {
+                Properties_RoadPainter component = bp.gameObject.GetComponent<Properties_RoadPainter>();
+                foreach(MeshRenderer ren in component.renderers)
+                {
+                    Material[] sharedMaterials = ren.sharedMaterials;
+                    for (int i = 0; i < sharedMaterials.Length; ++i)
+                    {
+                        sharedMaterials[i] = ghostMaterial;
+                    }
+                    ren.sharedMaterials = sharedMaterials;
+                }
+            }
+
+            ToolkitUtils.CleanGameObject(b);
+            return b;
+        }
+
+        public static GameObject CreateGhostBlock(LEV_LevelEditorCentral central, int blockID, Material ghostMaterial = null)
+        {
+            if (blockID < 0 || blockID >= PlayerManager.Instance.loader.globalBlockList.blocks.Count)
+            {
+                return null;
+            }
+
+            BlockProperties bp = GameObject.Instantiate<BlockProperties>(central.inspector.globalBlockList.blocks[blockID]);
+            bp.isBeingCreated = true;
+            bp.gameObject.name = central.inspector.globalBlockList.blocks[blockID].gameObject.name;
+            bp.isEditor = true;
+            bp.NewBlockCreatedFromEditorForV15JSON();
+            bp.CreateBlock();
+
+            GameObject b = bp.gameObject;
+
+            if (ghostMaterial != null)
+            {
+                Properties_RoadPainter component = bp.gameObject.GetComponent<Properties_RoadPainter>();
+                foreach (MeshRenderer ren in component.renderers)
+                {
+                    Material[] sharedMaterials = ren.sharedMaterials;
+                    for (int i = 0; i < sharedMaterials.Length; ++i)
+                    {
+                        sharedMaterials[i] = ghostMaterial;
+                    }
+                    ren.sharedMaterials = sharedMaterials;
+                }
+            }
 
             ToolkitUtils.CleanGameObject(b);
             return b;
